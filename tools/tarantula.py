@@ -516,8 +516,10 @@ def cmd_togglemap(a):
 def notify(text):
     import shutil, subprocess
     if shutil.which('notify-send'):
-        subprocess.run(['notify-send', '-a', 'Tarantula', '-e', '-t', '1500', '-i', 'input-keyboard',
-                        'Razer Tarantula', text], check=False)
+        r = subprocess.run(['notify-send', '-a', 'Tarantula', '-e', '-t', '3000', '-i', 'input-keyboard',
+                            'Razer Tarantula', text], check=False, capture_output=True, text=True)
+        if r.returncode or r.stderr.strip():
+            print(time.strftime('%H:%M:%S ') + f'notify-send rc={r.returncode} {r.stderr.strip()}', flush=True)
 
 
 def cmd_daemon(a):
