@@ -1,0 +1,19 @@
+# Razer's proprietary driver package, unpacked files and disassembly (not redistributable)
+extracted/
+disasm/
+*.zip
+# personal profile dumps / backups
+dumps/*
+!dumps/codetable.txt
+# local leftovers
+*.bak*
+__pycache__/
+# kernel module build output
+kmod/*.ko
+kmod/*.o
+kmod/*.mod
+kmod/*.mod.c
+kmod/.*.cmd
+kmod/Module.symvers
+kmod/modules.order
+kmod/.tmp_versions/
