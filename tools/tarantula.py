@@ -521,9 +521,21 @@ def notify(text):
 
 
 def cmd_daemon(a):
-    """Listen for the profile key (1-byte 0xB0 packet on IF0) and toggle key map A/B."""
+    """Listen on IF0 (/dev/hidraw3) for:
+    - the profile key (1-byte 0xB0 packet): toggle key map A/B of the active profile
+    - macro keys (HID usages 0xB1-0xBA in a key report): if one of them switched the
+      profile on-board (no 0xCn packet is sent), notice it by re-reading the profile
+    - 0xCn packets (firmware 'profile change'): notify"""
+    import select
     log = lambda m: print(time.strftime('%H:%M:%S ') + m, flush=True)
     log('tarantula map daemon started')
+
+    def announce(p, why):
+        e = load_state().get(str(p), {})
+        log(f'{why}: now profile {p}')
+        if not a.no_notify:
+            notify(f'Profile {p}' + (f' \u00b7 key map {e["active"]}' if e else ''))
+
     while True:
         path = find_hidraw(0)
         if path is None:
@@ -537,20 +549,33 @@ def cmd_daemon(a):
             continue
         log(f'listening on {path}')
         try:
+            last = short(RID_PROFILEID)[5]
+            checks = []                                  # monotonic times to re-read the profile
             while True:
-                data = os.read(fd, 64)
-                if len(data) == 1 and data[0] == 0xb0:
+                timeout = max(0.0, checks[0] - time.monotonic()) if checks else None
+                ready, _, _ = select.select([fd], [], [], timeout)
+                if ready:
+                    data = os.read(fd, 64)
+                    if len(data) == 1 and data[0] == 0xb0:
+                        p = short(RID_PROFILEID)[5]
+                        new = toggle_map(p, quiet=True)
+                        last = p
+                        log(f'profile key: profile {p} -> key map {new}')
+                        if not a.no_notify:
+                            notify(f'Profile {p} \u00b7 key map {new}')
+                    elif len(data) == 1 and 0xc0 <= data[0] <= 0xcd:
+                        last = short(RID_PROFILEID)[5]
+                        announce(last, f'keyboard profile change packet 0x{data[0]:02x}')
+                    elif len(data) == 8 and any(0xb1 <= b <= 0xba for b in data[2:]):
+                        now = time.monotonic()           # a macro key: it may switch profile
+                        checks = [now + 0.15, now + 0.5]
+                if checks and time.monotonic() >= checks[0]:
+                    checks.pop(0)
                     p = short(RID_PROFILEID)[5]
-                    new = toggle_map(p, quiet=True)
-                    log(f'profile key: profile {p} -> key map {new}')
-                    if not a.no_notify:
-                        notify(f'Profile {p} \u00b7 key map {new}')
-                elif len(data) == 1 and 0xc0 <= data[0] <= 0xcd:
-                    p = short(RID_PROFILEID)[5]
-                    log(f'keyboard switched profile (0x{data[0]:02x}): now {p}')
-                    if not a.no_notify:
-                        e = load_state().get(str(p), {})
-                        notify(f'Profile {p}' + (f' \u00b7 key map {e["active"]}' if e else ''))
+                    if p != last:
+                        last = p
+                        checks = []
+                        announce(p, 'macro key switched profile')
         except (OSError, RuntimeError, SystemExit) as e:
             log(f'device error ({e}); reconnecting')
             time.sleep(2)
@@ -566,7 +591,6 @@ def cmd_daemon(a):
                 except OSError:
                     pass
                 _kmod_fd = None
-
 
 MACRO_KEYS = [0x80, 0x81, 0x82, 0x84, 0x85, 0x89, 0x8a, 0x8b, 0x8c, 0x8d]
 
@@ -685,8 +709,8 @@ def cmd_macro(a):
     if key not in MACRO_KEYS:
         sys.exit('slot must be ML1..ML5, MR1..MR5 or 0..9')
     slot = MACRO_KEYS.index(key)
-    if a.default:
-        ev = [(key, 1), (key, 0)]
+    if a.default or a.profile_switch:
+        ev = [(key, 1), (key, 0)]          # unused for --profile-switch
     elif a.text is not None:
         ev = parse_macro(quote_text(a.text) + ' ' + ' '.join(a.spec))
     else:
@@ -774,7 +798,7 @@ def main():
     s.add_argument('--default', action='store_true', help='restore factory behaviour (key sends itself)')
     s.add_argument('--text', help='type this text (US layout), e.g. --text "gg wp"')
     s.add_argument('--profile-switch', type=int, choices=range(1, 6), metavar='N',
-                   help='make the key switch to profile N (untested)')
+                   help='make the key switch the keyboard to profile N (on-board)')
     s.add_argument('-p', '--profile', type=int, choices=range(1, 6), default=1)
     s.add_argument('--yes', action='store_true'); s.set_defaults(fn=cmd_macro)
     s = sub.add_parser('reset-keymap'); s.add_argument('-p', '--profile', type=int, choices=range(1, 6), default=1)

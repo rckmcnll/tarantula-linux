@@ -50,8 +50,13 @@ tools/tarantula.py daemon                            # listen for the key (+ not
 Maps live in `~/.config/tarantula/maps.json`; the active map is the one written in the
 keyboard, so each toggle rewrites the profile block in flash (fine for normal use, not for
 thousands of toggles a day). Service: `systemd/tarantula-mapd.service` (user unit).
-`0xCn` packets are the firmware's own "profile changed" notification (e.g. from a macro
-key set to switch profile); the daemon logs them and shows the new profile.
+On-board profile switching works (verified 2026-11-01): a macro key set with
+`macro MR5 --profile-switch 2` (or "Switch to profile" in the GUI) makes the keyboard change
+profile by itself, so it also works on a PC without any of this software. The key still
+sends its own usage (0xB1-0xBA, ignored by Linux) but no `0xCn` packet, so the daemon
+re-reads the active profile ~0.15 s / 0.5 s after any macro key and shows a
+"Profile N · key map X" notification when it changed. (`0xCn` packets, the firmware's
+"profile change" notification per razerhid.exe, are still handled if they ever appear.)
 
 ### Kernel module (`kmod/`)
 
