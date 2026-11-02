@@ -24,6 +24,15 @@ Without `--yes` every write is a dry run showing the diff. Each write first save
 current profile to `dumps/auto-p1-*.bin` and verifies by reading back.
 Non-root access: `install-udev.sh` (udev `uaccess` rule, already installed).
 
+### Graphical tool
+
+`tools/tarantula_gui.py` (GTK 4, no extra packages beyond `python3-gi`): a drawn
+Tarantula layout with the macro columns; click a key to remap it in key map A or B, click
+ML1-5 / MR1-5 to edit a macro (same text syntax as the CLI, validated live), pick the
+profile, make it active, swap the live map, then Apply (auto-backup + read-back verify as
+in the CLI). It follows profile-key presses handled by `tarantula-mapd` live.
+Launcher: `desktop/tarantula-config.desktop` (copy to `~/.local/share/applications/`).
+
 ### Profile key = key map A/B toggle
 
 The profile key (internal code 0x87) makes the keyboard send a 1-byte `b0` packet on IF0

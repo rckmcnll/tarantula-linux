@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Tarantula Configuration
+Comment=Key remaps, macros and profiles for the Razer Tarantula keyboard
+Exec=sh -c "exec python3 -I ~/tarantula-re/tools/tarantula_gui.py"
+Icon=input-keyboard
+Terminal=false
+Categories=Settings;HardwareSettings;

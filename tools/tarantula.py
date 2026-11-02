@@ -158,7 +158,7 @@ KEYS = {
     0x84: 'ML4',
     0x85: 'ML5',
     0x86: 'RShift',
-    0x87: 'Fn?',
+    0x87: 'Profile',
     0x88: 'LCtrl',
     0x89: 'MR1',
     0x8a: 'MR2',
@@ -177,7 +177,7 @@ KEYS = {
     0x97: 'VolDown_97',
     0x98: 'code98',
     0x99: 'WWWHome',
-    0x9a: 'code9a',
+    0x9a: 'Menu?',
     0x9b: 'code9b',
     0x9c: 'LWin?',
     0x9d: 'ZoomIn',
@@ -185,6 +185,9 @@ KEYS = {
     0x9f: 'code9f',
 }
 NAME2CODE = {v.lower(): k for k, v in KEYS.items()}
+NAME2CODE.update({'ctrl': 0x88, 'shift': 0x83, 'alt': 0x7d, 'win': 0x9c, 'super': 0x9c, 'menu': 0x9a,
+                  'esc': 0x15, 'escape': 0x15, 'return': 0x56, 'caps': 0x1b, 'del': 0x60, 'ins': 0x58,
+                  'pgup': 0x68, 'pgdn': 0x69, 'bksp': 0x53, 'lwin': 0x9c})
 
 
 def _ioc(d, nr, size):
@@ -576,7 +579,10 @@ def parse_macro(spec):
         if t.startswith('wait:'):
             if not ev:
                 sys.exit('wait: needs a preceding event')
-            ms = int(t[5:])
+            try:
+                ms = int(t[5:])
+            except ValueError:
+                sys.exit('wait: needs a number of milliseconds, e.g. wait:100')
             units = round(ms / 50)
             if not 0 <= units <= 127:
                 sys.exit('wait must be 0..6350 ms')
