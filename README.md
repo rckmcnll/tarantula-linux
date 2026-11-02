@@ -131,3 +131,9 @@ git clone https://github.com/rckmcnll/tarantula-linux ~/tarantula-re
 cp ~/tarantula-re/systemd/tarantula-mapd.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now tarantula-mapd
 ```
+
+## License
+
+GPL-2.0-only, see `LICENSE`. The kernel module must be GPL-compatible because it uses
+GPL-only kernel symbols (`usb_control_msg`, `usb_for_each_dev`). This project contains no
+Razer code or binaries; the protocol was documented from the official driver package.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """READ-ONLY probe #5: hidraw only, no detach, GET_REPORT only. Run as root.
 Reads each report 3x on IF0 (wIndex 0) and IF1 (wIndex 1) with exact lengths to check stability.
 Saves 472-byte group settings to ~/tarantula-re/dumps/hidraw_if<N>_group.bin.

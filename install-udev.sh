@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Give the logged-in user access to the Razer Tarantula hidraw nodes (no sudo needed for tarantula.py).
 set -e
 RULE=/etc/udev/rules.d/70-razer-tarantula.rules

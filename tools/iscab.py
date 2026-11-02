@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """Minimal InstallShield (v6+) cabinet extractor. Usage: iscab.py <dir-with-data1.hdr> <outdir> [--list]"""
 import hashlib, os, struct, sys, zlib
 

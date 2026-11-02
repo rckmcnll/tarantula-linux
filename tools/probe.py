@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """READ-ONLY probe of the Razer Tarantula (1532:0102) hidden HID reports.
 
 Only issues HID GET_REPORT requests (via hidraw HIDIOCGFEATURE / HIDIOCGINPUT).

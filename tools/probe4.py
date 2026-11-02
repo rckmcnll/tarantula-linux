@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """READ-ONLY probe #4 (GET_REPORT only). Run as root.
 1) GET_FWVERSION with interface recipient wIndex=1 (IF1 detached briefly): does fw answer on wIndex!=0?
 2) GET_GROUP_SETTING wIndex=0 again (IF0 detached ~1s): reproducible?

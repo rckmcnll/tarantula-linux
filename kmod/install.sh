@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Install tarantula_ctl via DKMS (signed with the enrolled DKMS MOK key, rebuilt on kernel updates),
 # load it, autoload at boot, and give the logged-in user access to /dev/tarantula.
 set -e

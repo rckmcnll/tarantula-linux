@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """READ-ONLY probe #3 (GET_REPORT only, nothing is written to the keyboard).
 
 A) Device-recipient GETs (bmRequestType 0xA0): needs no detach at all.

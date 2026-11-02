@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """READ-ONLY probe #2: replicate the Windows driver's exact HID class GET_REPORT URBs
 (bmRequestType 0xA1, bRequest 0x01, wValue = 0x00<id>, i.e. report type 0) via usbfs.
 

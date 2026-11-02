@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """Watch for profile-key presses on the Razer Tarantula.
 
 Prints every raw input report from both hidraw interfaces (the profile key is expected

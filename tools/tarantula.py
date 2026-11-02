@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """tarantula.py - Linux config tool for the Razer Tarantula keyboard (USB 1532:0102).
 
 Protocol reverse-engineered from the Razer v2.10 Windows driver (UsbFltr.sys + razerhid.exe).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * tarantula_ctl - profile access for the Razer Tarantula keyboard (USB 1532:0102)
  *
