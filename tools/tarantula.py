@@ -376,7 +376,8 @@ def keycode(s):
         c = -1
     if 0x10 <= c <= 0x9f:
         return c
-    sys.exit(f'unknown key {s!r} (see: tarantula.py keys)')
+    hint = f' - to type text, put it in quotes: "{s}"' if len(s) > 1 and s.isalnum() else ''
+    sys.exit(f'unknown key {s!r}{hint}')
 
 
 BACKUP_DIR = os.path.expanduser('~/tarantula-re/dumps')
@@ -570,11 +571,87 @@ def cmd_daemon(a):
 MACRO_KEYS = [0x80, 0x81, 0x82, 0x84, 0x85, 0x89, 0x8a, 0x8b, 0x8c, 0x8d]
 
 
+# text -> key presses (assumes a US layout on the host)
+_UNSHIFTED = {'`': '`', '-': '-', '=': '=', '[': '[', ']': ']', '\\': 'ISO#', ';': ';', "'": "'",
+              ',': ',', '.': '.', '/': '/', ' ': 'Space'}
+_SHIFTED = {'~': '`', '!': '1', '@': '2', '#': '3', '$': '4', '%': '5', '^': '6', '&': '7', '*': '8',
+            '(': '9', ')': '0', '_': '-', '+': '=', '{': '[', '}': ']', '|': 'ISO#', ':': ';', '"': "'",
+            '<': ',', '>': '.', '?': '/'}
+_LSHIFT = 0x83
+
+
+def char_key(ch):
+    """(code, needs_shift) for a printable character, or None."""
+    if ch.isascii() and ch.isalpha():
+        return NAME2CODE[ch.lower()], ch.isupper()
+    if ch.isascii() and ch.isdigit():
+        return NAME2CODE[ch], False
+    if ch in _UNSHIFTED:
+        return NAME2CODE[_UNSHIFTED[ch].lower()], False
+    if ch in _SHIFTED:
+        return NAME2CODE[_SHIFTED[ch].lower()], True
+    return None
+
+
+KEY2CHAR = {}
+for _ch in [chr(i) for i in range(32, 127)]:
+    _k = char_key(_ch)
+    if _k:
+        KEY2CHAR.setdefault(_k, _ch)
+
+
+def text_events(text):
+    ev = []
+    for ch in text:
+        k = char_key(ch)
+        if k is None:
+            sys.exit(f'cannot type {ch!r} (US layout ASCII only; use key names for others)')
+        code, shift = k
+        if shift:
+            ev += [(_LSHIFT, 1), (code, 1), (code, 0), (_LSHIFT, 0)]
+        else:
+            ev += [(code, 1), (code, 0)]
+    return ev
+
+
+def quote_text(text):
+    return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def _tokens(spec):
+    """Split a macro spec; quoted strings become ('text', str), everything else ('tok', str)."""
+    i, n = 0, len(spec)
+    while i < n:
+        if spec[i].isspace():
+            i += 1
+        elif spec[i] == '"':
+            j, buf = i + 1, []
+            while j < n and spec[j] != '"':
+                if spec[j] == '\\' and j + 1 < n:
+                    j += 1
+                buf.append(spec[j])
+                j += 1
+            if j >= n:
+                sys.exit('unterminated "quoted text"')
+            yield 'text', ''.join(buf)
+            i = j + 1
+        else:
+            j = i
+            while j < n and not spec[j].isspace() and spec[j] != '"':
+                j += 1
+            yield 'tok', spec[i:j]
+            i = j
+
+
 def parse_macro(spec):
     """Tokens: KEY (tap)  A+B+C (chord: press in order, release reversed)
-    down:KEY  up:KEY  wait:MS (pause after previous event, 50 ms steps, max 6350)"""
+    down:KEY  up:KEY  wait:MS (pause after previous event, 50 ms steps, max 6350)
+    "text" (typed as key taps, Shift added for capitals/symbols; US layout)"""
     ev = []
-    for tok in spec.split():
+    for kind, tok in _tokens(spec):
+        if kind == 'text':
+            ev += text_events(tok)
+            continue
         t = tok.lower()
         if t.startswith('wait:'):
             if not ev:
@@ -598,7 +675,8 @@ def parse_macro(spec):
     if not ev:
         sys.exit('empty macro')
     if len(ev) > 16:
-        sys.exit(f'macro has {len(ev)} events; a slot holds 16 (one tap = 2 events)')
+        sys.exit(f'too long: {len(ev)} events, a macro key holds 16 '
+                 f'(a key = 2, a capital/symbol = 4)')
     return ev
 
 
@@ -609,6 +687,8 @@ def cmd_macro(a):
     slot = MACRO_KEYS.index(key)
     if a.default:
         ev = [(key, 1), (key, 0)]
+    elif a.text is not None:
+        ev = parse_macro(quote_text(a.text) + ' ' + ' '.join(a.spec))
     else:
         ev = parse_macro(' '.join(a.spec))
     body = bytearray(MACRO_LEN)
@@ -692,6 +772,7 @@ def main():
     s = sub.add_parser('macro', help='program a macro key')
     s.add_argument('slot'); s.add_argument('spec', nargs='*')
     s.add_argument('--default', action='store_true', help='restore factory behaviour (key sends itself)')
+    s.add_argument('--text', help='type this text (US layout), e.g. --text "gg wp"')
     s.add_argument('--profile-switch', type=int, choices=range(1, 6), metavar='N',
                    help='make the key switch to profile N (untested)')
     s.add_argument('-p', '--profile', type=int, choices=range(1, 6), default=1)

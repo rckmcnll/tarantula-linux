@@ -12,6 +12,7 @@ tools/tarantula.py keys                         # list key names / internal code
 tools/tarantula.py remap capslock lctrl --yes   # physical key -> other key
 tools/tarantula.py reset-keymap --yes
 tools/tarantula.py macro ML3 lctrl+c --yes      # tap, chord, down:K, up:K, wait:MS
+tools/tarantula.py macro ML4 --text "gg wp" enter --yes   # or "quoted text" in a spec
 tools/tarantula.py macro ML3 --default --yes    # factory behaviour
 tools/tarantula.py backup -p 1 FILE / write -p 1 FILE --yes
 tools/tarantula.py switch 3                     # make profile 3 active (kernel module)
@@ -96,7 +97,8 @@ HID descriptor. Linux: hidraw `HIDIOCGFEATURE`/`HIDIOCSFEATURE` with the **exact
 | 0x096 | 10×32 | macro slots for codes 80 81 82 84 85 89 8a 8b 8c 8d (ML1-5, MR1-5) |
 | 0x1d6 | 2 | XOR of even bytes, XOR of odd bytes |
 
-Macro slot: up to 16 × `[code, flag]`, terminated by code 0. Flag bit0 = down,
+Macro slot: up to 16 × `[code, flag]`, terminated by code 0 (a key tap = 2 events,
+a capital or shifted symbol = 4, so at most 8 plain characters). Flag bit0 = down,
 bits 1-7 = pause after the event in 50 ms units. Special slots: `a5 <n>` = switch to
 profile n, `a6` = launch program (host side, Windows only).
 

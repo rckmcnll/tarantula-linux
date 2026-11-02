@@ -101,10 +101,10 @@ TARGETS = sorted(t.KEYS)                      # every code can be a remap target
 TARGET_LABELS = [f'{t.keyname(c)}  ({c:02x})' for c in TARGETS]
 
 
-def events_to_spec(slot):
-    """Macro slot -> text: taps 'x', chords 'ctrl+c', waits 'wait:N', else down:/up:."""
+def _event_tokens(slot):
+    """Macro slot -> list of (token, wait_ms, char_or_None)."""
     ev = [(slot[i], slot[i + 1]) for i in range(0, t.MACRO_LEN, 2) if slot[i]]
-    toks, i = [], 0
+    out, i = [], 0
     while i < len(ev):
         j, downs = i, []
         while j < len(ev) and ev[j][1] == 1:            # plain key-downs, no delay
@@ -114,17 +114,54 @@ def events_to_spec(slot):
         ups = ev[j:j + k]
         if k and len(ups) == k and all(c == downs[k - 1 - n] and not f & 1 for n, (c, f) in enumerate(ups)) \
                 and all(f == 0 for _, f in ups[:-1]):
-            toks.append('+'.join(t.keyname(c).lower() for c in downs))
-            wait = ups[-1][1] >> 1
+            tok = '+'.join(t.keyname(c).lower() for c in downs)
+            ch = None
+            if k == 1:
+                ch = t.KEY2CHAR.get((downs[0], False))
+            elif k == 2 and downs[0] == 0x83:
+                ch = t.KEY2CHAR.get((downs[1], True))
+            out.append((tok, (ups[-1][1] >> 1) * 50, ch))
             i = j + k
         else:
             c, f = ev[i]
-            toks.append(('down:' if f & 1 else 'up:') + t.keyname(c).lower())
-            wait = f >> 1
+            out.append((('down:' if f & 1 else 'up:') + t.keyname(c).lower(), (f >> 1) * 50, None))
             i += 1
+    return out
+
+
+def events_to_spec(slot):
+    """Macro slot -> text: "typed text", taps 'x', chords 'ctrl+c', waits 'wait:N', else down:/up:."""
+    toks, run = [], ''
+    for tok, wait, ch in _event_tokens(slot):
+        if ch is not None:
+            run += ch
+            if not wait:
+                continue
+        if run:
+            toks.append(t.quote_text(run))
+            run = ''
+        if ch is None:
+            toks.append(tok)
         if wait:
-            toks.append(f'wait:{wait * 50}')
+            toks.append(f'wait:{wait}')
+    if run:
+        toks.append(t.quote_text(run))
     return ' '.join(toks)
+
+
+def events_to_text(slot):
+    """The literal text if the slot is nothing but typed characters (no waits), else None."""
+    toks = _event_tokens(slot)
+    if toks and all(ch is not None and not wait for _, wait, ch in toks):
+        return ''.join(ch for _, _, ch in toks)
+    return None
+
+
+def encode(ev):
+    body = bytearray(t.MACRO_LEN)
+    for i, (c, f) in enumerate(ev):
+        body[2 * i], body[2 * i + 1] = c, f
+    return bytes(body)
 
 
 def call(fn, *a):
@@ -576,53 +613,89 @@ class Window(Gtk.ApplicationWindow):
         m = self.model
         body = m.slot(code)
         default = body[:2] == bytes([code, 1]) and body[2] == code and not any(body[4:])
-        mode = 0 if default else (2 if body[0] == 0xa5 else 1)
-        modes = Gtk.DropDown.new_from_strings(['Default (sends itself)', 'Macro', 'Switch to profile'])
+        DEFAULT, TEXT, KEYS, PROFILE = range(4)
+        text = None if default or body[0] in (0xa5, 0xa6) else events_to_text(body)
+        mode = DEFAULT if default else PROFILE if body[0] == 0xa5 else TEXT if text is not None else KEYS
+        modes = Gtk.DropDown.new_from_strings(['Default (sends itself)', 'Type text', 'Keys & delays',
+                                               'Switch to profile'])
         modes.set_selected(mode)
-        entry = Gtk.Entry(hexpand=True, placeholder_text='e.g.  ctrl+c   or   h e l l o wait:200 enter')
-        entry.set_text('' if mode != 1 else events_to_spec(body))
+        text_entry = Gtk.Entry(hexpand=True, placeholder_text='text to type, e.g.  gg wp  (US layout)')
+        text_entry.set_text(text or '')
+        keys_entry = Gtk.Entry(hexpand=True,
+                               placeholder_text='e.g.  ctrl+c   or   "hello" wait:200 enter   or   down:shift a up:shift')
+        keys_entry.set_text(events_to_spec(body) if mode == KEYS else '')
+        keys_entry.set_tooltip_text('Key names separated by spaces (see tarantula.py keys). '
+                                    '"quoted text" is typed as-is; a+b = chord; wait:MS pauses (50 ms steps); '
+                                    'down:KEY / up:KEY. A macro key holds 16 events: key = 2, capital/symbol = 4.')
         spin = Gtk.SpinButton.new_with_range(1, 5, 1)
-        spin.set_value(body[1] if mode == 2 else 1)
-        info = Gtk.Label(css_classes=['dim-label'])
-        for w in (modes, entry, spin, info):
+        spin.set_value(body[1] if mode == PROFILE else 1)
+        info = Gtk.Label(xalign=0, css_classes=['dim-label'], max_width_chars=34, wrap=True)
+        for w in (modes, text_entry, keys_entry, spin, info):
             self.editor.append(w)
         if body[0] == 0xa6:
             info.set_text('was: launch program (Windows-only, replaced on edit)')
+        state = {'mode': mode}
+
+        def show_error(entry, msg):
+            self.invalid = True
+            info.set_markup(f'<span foreground="#d33">{GLib.markup_escape_text(msg)}</span>')
+            entry.add_css_class('error')
 
         def update(*_):
+            if state.get('busy'):                        # ignore 'changed' fired by our own set_text
+                return
             sel = modes.get_selected()
-            entry.set_visible(sel == 1)
-            spin.set_visible(sel == 2)
+            if sel != state['mode']:                     # carry content across mode switches
+                prev, state['mode'], state['busy'] = state['mode'], sel, True
+                try:
+                    if prev == TEXT and sel == KEYS and text_entry.get_text():
+                        keys_entry.set_text(t.quote_text(text_entry.get_text()))
+                    elif prev == KEYS and sel == TEXT:
+                        try:
+                            txt = events_to_text(encode(call(t.parse_macro, keys_entry.get_text())))
+                            if txt is not None:
+                                text_entry.set_text(txt)
+                        except RuntimeError:
+                            pass
+                finally:
+                    state['busy'] = False
+            text_entry.set_visible(sel == TEXT)
+            keys_entry.set_visible(sel == KEYS)
+            spin.set_visible(sel == PROFILE)
             self.invalid = False
+            for e in (text_entry, keys_entry):
+                e.remove_css_class('error')
             new = bytearray(t.MACRO_LEN)
-            if sel == 0:
+            if sel == DEFAULT:
                 new[0:4] = bytes([code, 1, code, 0])
                 info.set_text('')
-            elif sel == 2:
+            elif sel == PROFILE:
                 new[0], new[1] = 0xa5, int(spin.get_value())
-                info.set_text('(on-board profile switch, untested)')
+                info.set_text('on-board profile switch (untested)')
             else:
+                entry = text_entry if sel == TEXT else keys_entry
+                spec = t.quote_text(entry.get_text()) if sel == TEXT else entry.get_text()
                 try:
-                    ev = call(t.parse_macro, entry.get_text())
-                    for i, (c, f) in enumerate(ev):
-                        new[2 * i], new[2 * i + 1] = c, f
-                    info.set_text(f'{len(ev)}/16 events')
-                    entry.remove_css_class('error')
+                    if not entry.get_text():
+                        raise RuntimeError('empty macro')
+                    ev = call(t.parse_macro, spec)
                 except RuntimeError as e:
-                    self.invalid = True
-                    info.set_text(str(e))
-                    entry.add_css_class('error')
+                    show_error(entry, str(e))
                     self.refresh_soft()
                     return
+                new[:] = encode(ev)
+                info.set_text(f'{len(ev)}/16 events')
             if bytes(new) != bytes(m.slot(code)):
                 m.set_slot(code, new)
             self.refresh_soft()
         modes.connect('notify::selected', update)
-        entry.connect('changed', update)
+        text_entry.connect('changed', update)
+        keys_entry.connect('changed', update)
         spin.connect('value-changed', update)
-        entry.set_visible(mode == 1)
-        spin.set_visible(mode == 2)
-        if mode == 1:
+        text_entry.set_visible(mode == TEXT)
+        keys_entry.set_visible(mode == KEYS)
+        spin.set_visible(mode == PROFILE)
+        if mode in (TEXT, KEYS):
             info.set_text(f'{sum(1 for i in range(0, 32, 2) if body[i])}/16 events')
 
     def refresh_soft(self):
